@@ -17,6 +17,7 @@ Created on Jul 28, 2016
 
 author: jakeret
 '''
+
 from __future__ import print_function, division, absolute_import, unicode_literals
 
 import os
@@ -64,6 +65,8 @@ def create_conv_net(x, keep_prob, channels, n_class, layers=3, features_root=16,
         ny = tf.shape(x)[2]
         x_image = tf.reshape(x, tf.stack([-1, nx, ny, channels]))
         in_node = x_image
+        print('-----------------------------')
+        print(in_node)
         batch_size = tf.shape(x_image)[0]
 
     weights = []
@@ -209,6 +212,8 @@ class Unet(object):
             self.predicter = pixel_wise_softmax(logits)
             self.correct_pred = tf.equal(tf.argmax(self.predicter, 3), tf.argmax(self.y, 3))
             self.accuracy = tf.reduce_mean(tf.cast(self.correct_pred, tf.float32))
+        
+        #self.debug = None
 
     def _get_cost(self, logits, cost_name, cost_kwargs):
         """
@@ -221,6 +226,9 @@ class Unet(object):
         with tf.name_scope("cost"):
             flat_logits = tf.reshape(logits, [-1, self.n_class])
             flat_labels = tf.reshape(self.y, [-1, self.n_class])
+            self.debug_logits = flat_logits
+            self.debug_labels = flat_labels
+            #print(flat_labels)
             if cost_name == "cross_entropy":
                 class_weights = cost_kwargs.pop("class_weights", None)
 
@@ -230,6 +238,7 @@ class Unet(object):
                     weight_map = tf.multiply(flat_labels, class_weights)
                     weight_map = tf.reduce_sum(weight_map, axis=1)
 
+
                     loss_map = tf.nn.softmax_cross_entropy_with_logits_v2(logits=flat_logits,
                                                                           labels=flat_labels)
                     weighted_loss = tf.multiply(loss_map, weight_map)
@@ -237,8 +246,12 @@ class Unet(object):
                     loss = tf.reduce_mean(weighted_loss)
 
                 else:
-                    loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=flat_logits,
-                                                                                     labels=flat_labels))
+                    #-------------------remember to recover--------------------------
+                    self.debug = tf.nn.softmax_cross_entropy_with_logits_v2(logits=flat_logits,labels=flat_labels)
+                    loss = tf.reduce_mean(self.debug)                                                       
+                    '''loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=flat_logits,
+                                                                                     labels=flat_labels))'''
+                    #self.debug = loss
             elif cost_name == "dice_coefficient":
                 eps = 1e-5
                 prediction = pixel_wise_softmax(logits)
@@ -420,6 +433,7 @@ class Trainer(object):
                     self.net.restore(sess, ckpt.model_checkpoint_path)
 
             test_x, test_y = data_provider(self.verification_batch_size)
+            #print(test_x.shape, test_y.shape)
             pred_shape = self.store_prediction(sess, test_x, test_y, "_init")
 
             summary_writer = tf.summary.FileWriter(output_path, graph=sess.graph)
@@ -432,6 +446,7 @@ class Trainer(object):
                     batch_x, batch_y = data_provider(self.batch_size)
 
                     # Run optimization op (backprop)
+                    #print(batch_y)
                     _, loss, lr, gradients = sess.run(
                         (self.optimizer, self.net.cost, self.learning_rate_node, self.net.gradients_node),
                         feed_dict={self.net.x: batch_x,
@@ -458,9 +473,30 @@ class Trainer(object):
             return save_path
 
     def store_prediction(self, sess, batch_x, batch_y, name):
+        '''#print(batch_y.shape)
+        lo, la = sess.run([self.net.debug_logits, self.net.debug_labels], feed_dict={self.net.x: batch_x,
+                                                             self.net.y: batch_y,
+                                                             self.net.keep_prob: 1.})
+        
+        
+        #print(prediction)
+        print(lo.shape)
+        print(la.shape)
+
+        prediction = sess.run(self.net.debug, feed_dict={self.net.x: batch_x,
+                                                             self.net.y: batch_y,
+                                                             self.net.keep_prob: 1.})
+        
+        
+        print(prediction)
+        print(prediction.shape)'''
+
         prediction = sess.run(self.net.predicter, feed_dict={self.net.x: batch_x,
                                                              self.net.y: batch_y,
                                                              self.net.keep_prob: 1.})
+        #print(prediction)
+        #print(prediction.shape)
+        
         pred_shape = prediction.shape
 
         loss = sess.run(self.net.cost, feed_dict={self.net.x: batch_x,

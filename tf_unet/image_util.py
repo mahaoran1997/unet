@@ -174,8 +174,18 @@ class ImageDataProvider(BaseDataProvider):
         return [name for name in all_files if self.data_suffix in name and not self.mask_suffix in name]
     
     
-    def _load_file(self, path, dtype=np.float32):
-        return np.array(Image.open(path), dtype)
+    def _load_file(self, path, dtype=np.float32, l = False):
+        f = np.array(Image.open(path), dtype)
+        f = f[1:]
+        
+        '''if l:
+            #f = f[:,:,np.newaxis]
+            g = np.zeros([2305, 1280, 2])
+            g[:, :, 0] = (f == 0)
+            g[:, :, 1] = (f == 1)
+            return g'''
+        return f
+        
         # return np.squeeze(cv2.imread(image_name, cv2.IMREAD_GRAYSCALE))
 
     def _cylce_file(self):
@@ -191,6 +201,6 @@ class ImageDataProvider(BaseDataProvider):
         label_name = image_name.replace(self.data_suffix, self.mask_suffix)
         
         img = self._load_file(image_name, np.float32)
-        label = self._load_file(label_name, np.bool)
+        label = self._load_file(label_name, np.bool, True)
     
         return img,label
